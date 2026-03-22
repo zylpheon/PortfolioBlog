@@ -1,0 +1,196 @@
+---
+title: "Docker for Developers: From Zero to Production-Ready Containers"
+date: "2025-11-05"
+excerpt: "A practical guide to containerising your web applications — covering Dockerfiles, Compose, multi-stage builds, and deployment patterns."
+tags: ["DevOps", "Docker", "Tutorial", "Backend"]
+readTime: "8 min read"
+---
+
+## Why Docker matters for developers
+
+"Works on my machine" is one of the oldest problems in software. Docker solves it by packaging your application along with its entire runtime environment — OS libraries, dependencies, config — into a portable image that runs identically everywhere.
+
+Whether you're deploying to a VPS, Kubernetes, or a friend's laptop, the behaviour is the same.
+
+## Your first Dockerfile
+
+Let's containerise a Node.js + Express API.
+
+```dockerfile
+# Use the official Node.js LTS image as the base
+FROM node:20-alpine
+
+# Set working directory inside the container
+WORKDIR /app
+
+# Copy dependency manifests first (better layer caching)
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --omit=dev
+
+# Copy application source
+COPY . .
+
+# Expose the port your app listens on
+EXPOSE 3000
+
+# Start the server
+CMD ["node", "src/index.js"]
+```
+
+<Callout type="tip">
+  Always copy `package.json` and install dependencies **before** copying your source code. Docker caches each layer — if your source changes but `package.json` doesn't, it reuses the cached `node_modules` layer and your build takes seconds instead of minutes.
+</Callout>
+
+Build and run it:
+
+```bash
+# Build the image
+docker build -t my-api:latest .
+
+# Run it, mapping container port 3000 → host port 3000
+docker run -p 3000:3000 my-api:latest
+```
+
+## Multi-stage builds
+
+The image above works, but it ships everything. For production, you want the smallest possible image — no build tools, no dev dependencies, no source maps.
+
+Multi-stage builds solve this:
+
+```dockerfile
+# ── Stage 1: build ──────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build   # outputs to /app/dist
+
+# ── Stage 2: production runtime ─────────────────────────
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Only copy the compiled output from the builder stage
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
+```
+
+The final image contains zero build tooling. For a typical Express API this cuts image size from ~400MB to ~80MB.
+
+## Docker Compose for local development
+
+Running multiple services manually gets tedious fast. Docker Compose lets you define your entire stack in one file.
+
+```yaml
+# docker-compose.yml
+version: '3.9'
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres:secret@db:5432/myapp
+      REDIS_URL: redis://cache:6379
+    depends_on:
+      - db
+      - cache
+    volumes:
+      - .:/app            # mount source for hot reload in dev
+      - /app/node_modules # keep container's node_modules
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  cache:
+    image: redis:7-alpine
+
+volumes:
+  pg_data:
+```
+
+Start everything with one command:
+
+```bash
+docker compose up        # foreground, see all logs
+docker compose up -d     # detached (background)
+docker compose down      # stop and remove containers
+docker compose down -v   # also remove volumes (wipes DB data)
+```
+
+## Useful day-to-day commands
+
+| Command | What it does |
+|---------|-------------|
+| `docker ps` | List running containers |
+| `docker logs <name> -f` | Follow container logs |
+| `docker exec -it <name> sh` | Open a shell inside a running container |
+| `docker images` | List all local images |
+| `docker system prune` | Remove unused images/containers/networks |
+
+## Production considerations
+
+<Callout type="warning">
+  Never put secrets (API keys, DB passwords) directly in your `Dockerfile` or `docker-compose.yml`. Use environment variables injected at runtime, or a secrets manager like HashiCorp Vault or Docker Secrets.
+</Callout>
+
+A few patterns I use in every production deployment:
+
+**1. Run as non-root user**
+
+```dockerfile
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+```
+
+**2. Health checks**
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+```
+
+**3. Read-only filesystem**
+
+```bash
+docker run --read-only -p 3000:3000 my-api:latest
+```
+
+## Deploying to a VPS
+
+Once your image is built, push it to a registry and pull it on your server:
+
+```bash
+# Tag for Docker Hub (or any registry)
+docker tag my-api:latest yourusername/my-api:latest
+
+# Push
+docker push yourusername/my-api:latest
+
+# On your server
+docker pull yourusername/my-api:latest
+docker run -d -p 3000:3000 --restart unless-stopped yourusername/my-api:latest
+```
+
+For zero-downtime deploys, add Nginx in front as a reverse proxy and use `docker compose up --no-deps -d api` to replace only the API container.
+
+---
+
+Docker has a reputation for a steep learning curve, but the core workflow — write a Dockerfile, compose locally, push and pull to deploy — is something you can master in a day. The payoff in consistency and reproducibility is immediate.

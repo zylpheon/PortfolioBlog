@@ -1,0 +1,268 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Light Theme Variables ───────────────────────────── */
+:root {
+  --bg: #F2F0EB;
+  --surface: #E8E6E0;
+  --surface-2: #DEDAD3;
+  --border-color: rgba(17, 17, 17, 0.12);
+  --ink: #111111;
+  --ink-secondary: #4A4845;
+  --ink-muted: #8A8783;
+  --accent: #111111;
+  --code-bg: #E2E0D9;
+  --hljs-bg: #E2E0D9;
+}
+
+/* ─── Dark Theme Variables ────────────────────────────── */
+.dark {
+  --bg: #111111;
+  --surface: #1A1A18;
+  --surface-2: #222220;
+  --border-color: rgba(242, 240, 235, 0.1);
+  --ink: #F2F0EB;
+  --ink-secondary: #B5B2AD;
+  --ink-muted: #6A6762;
+  --accent: #F2F0EB;
+  --code-bg: #1E1E1C;
+  --hljs-bg: #1E1E1C;
+}
+
+/* ─── Base ────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  background-color: var(--bg);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: 'Barlow', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ─── Grain Overlay ───────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='250' height='250' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 250px 250px;
+}
+
+/* ─── Custom Scrollbar ────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 17, 0.18);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(17, 17, 17, 0.45); }
+* { scrollbar-width: thin; scrollbar-color: rgba(17, 17, 17, 0.18) transparent; }
+
+.dark ::-webkit-scrollbar-thumb { background: rgba(242, 240, 235, 0.18); }
+.dark * { scrollbar-color: rgba(242, 240, 235, 0.18) transparent; }
+
+/* ─── Selection ───────────────────────────────────────── */
+::selection { background: var(--ink); color: var(--bg); }
+
+/* ─── Utility Classes ─────────────────────────────────── */
+@layer components {
+  .section-label {
+    @apply font-display text-[10px] font-500 tracking-widest2 uppercase text-ink-muted;
+  }
+  .section-number {
+    @apply font-display text-[11px] font-600 tracking-wider text-ink-muted;
+  }
+  .divider {
+    @apply w-full h-px bg-border;
+  }
+  .tag {
+    @apply inline-flex items-center px-2.5 py-0.5 text-[11px] font-body font-500
+           border border-border text-ink-secondary rounded-full
+           transition-all duration-200 hover:border-ink hover:text-ink cursor-pointer;
+  }
+  .tag-active {
+    @apply inline-flex items-center px-2.5 py-0.5 text-[11px] font-body font-500
+           bg-ink text-bg border border-ink rounded-full cursor-pointer;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 font-display text-xs font-600
+           tracking-wider uppercase bg-ink text-bg border border-ink
+           transition-all duration-300 hover:bg-bg hover:text-ink;
+  }
+  .btn-outline {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 font-display text-xs font-600
+           tracking-wider uppercase bg-transparent text-ink border border-ink
+           transition-all duration-300 hover:bg-ink hover:text-bg;
+  }
+}
+
+/* ─── Article / MDX Typography ───────────────────────── */
+.prose-article {
+  color: var(--ink-secondary);
+  font-family: 'Barlow', sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  max-width: 68ch;
+}
+
+.prose-article h1,
+.prose-article h2,
+.prose-article h3,
+.prose-article h4 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-top: 2.5em;
+  margin-bottom: 0.75em;
+}
+
+.prose-article h2 {
+  font-size: clamp(1.3rem, 2.5vw, 1.7rem);
+  padding-top: 0.5em;
+  border-top: 1px solid var(--border-color);
+}
+
+.prose-article h3 {
+  font-size: clamp(1.1rem, 2vw, 1.3rem);
+}
+
+.prose-article p {
+  margin-bottom: 1.5em;
+}
+
+.prose-article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--border-color);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s;
+}
+.prose-article a:hover {
+  text-decoration-color: var(--ink);
+}
+
+.prose-article strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.prose-article blockquote {
+  border-left: 3px solid var(--ink);
+  padding: 0.5em 1.25em;
+  margin: 2em 0;
+  background: var(--surface);
+  font-style: italic;
+  color: var(--ink-secondary);
+}
+
+.prose-article blockquote p { margin-bottom: 0; }
+
+.prose-article ul,
+.prose-article ol {
+  padding-left: 1.5em;
+  margin-bottom: 1.5em;
+}
+
+.prose-article ul { list-style-type: disc; }
+.prose-article ol { list-style-type: decimal; }
+
+.prose-article li {
+  margin-bottom: 0.4em;
+}
+
+.prose-article hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 3em 0;
+}
+
+/* ─── Inline Code ─────────────────────────────────────── */
+.prose-article code:not(pre code) {
+  background: var(--code-bg);
+  color: var(--ink);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.45em;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+}
+
+/* ─── Code Blocks (rehype-highlight) ─────────────────── */
+.prose-article pre {
+  background: var(--hljs-bg) !important;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1.25em 1.5em;
+  overflow-x: auto;
+  margin: 1.75em 0;
+  position: relative;
+}
+
+.prose-article pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+/* dark mode HLJS overrides */
+.dark .hljs { background: var(--hljs-bg) !important; color: #c9d1d9 !important; }
+.dark .hljs-keyword { color: #ff7b72 !important; }
+.dark .hljs-string { color: #a5d6ff !important; }
+.dark .hljs-comment { color: #8b949e !important; }
+.dark .hljs-function { color: #d2a8ff !important; }
+.dark .hljs-number { color: #f2cc60 !important; }
+.dark .hljs-title { color: #79c0ff !important; }
+.dark .hljs-variable { color: #ffa657 !important; }
+.dark .hljs-attr { color: #79c0ff !important; }
+.dark .hljs-built_in { color: #ffa657 !important; }
+.dark .hljs-type { color: #ffa657 !important; }
+
+/* ─── Images in articles ──────────────────────────────── */
+.prose-article img {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  margin: 2em 0;
+}
+
+/* ─── Table ───────────────────────────────────────────── */
+.prose-article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2em 0;
+  font-size: 0.9rem;
+}
+.prose-article th {
+  background: var(--surface);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.7em 1em;
+  border: 1px solid var(--border-color);
+  text-align: left;
+  color: var(--ink);
+}
+.prose-article td {
+  padding: 0.6em 1em;
+  border: 1px solid var(--border-color);
+  color: var(--ink-secondary);
+}
+.prose-article tr:nth-child(even) td { background: var(--surface); }

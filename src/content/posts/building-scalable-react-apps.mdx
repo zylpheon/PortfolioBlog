@@ -1,0 +1,95 @@
+---
+title: "Building Scalable React Applications with Node.js"
+date: "2026-02-10"
+excerpt: "Exploring architectural patterns and best practices for building applications that gracefully grow with your users and team."
+tags: ["React", "Node.js", "Tutorial"]
+readTime: "7 min read"
+featured: true
+---
+
+## Introduction
+
+Scalability is one of those words thrown around constantly in software development. But what does it actually mean for a React + Node.js project? In this article, I'll walk through the architectural decisions I've found most impactful in production.
+
+## Project Structure
+
+Good structure is the foundation of a scalable app. Here's the layout I default to for medium-to-large projects:
+
+```
+src/
+├── components/     ← Pure, reusable UI components
+├── features/       ← Feature-scoped modules (auth, dashboard, etc.)
+├── hooks/          ← Custom React hooks
+├── services/       ← API clients and external integrations
+├── store/          ← Global state (Zustand or Redux Toolkit)
+└── utils/          ← Pure utility functions
+```
+
+The key insight: **colocate by feature, not by type**. Your `UserProfile` component, its styles, tests, and API calls should all live together.
+
+## State Management Strategy
+
+<Callout type="tip">
+  For most apps, start with React's built-in useState and useContext. Reach for Zustand or Redux Toolkit only when prop-drilling becomes genuinely painful — not preemptively.
+</Callout>
+
+A rule of thumb for deciding where state lives:
+
+1. **Component state** — UI-only, not shared (`useState`)
+2. **Server state** — Data from APIs (`React Query` / `SWR`)
+3. **Global state** — Auth, theme, user preferences (`Zustand`)
+
+### Example: A clean data-fetching hook
+
+```javascript
+// hooks/useUser.js
+import { useQuery } from '@tanstack/react-query'
+import { userService } from '../services/userService'
+
+export function useUser(userId) {
+  return useQuery({
+    queryKey: ['user', userId],
+    queryFn: () => userService.getById(userId),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+```
+
+## API Layer on Node.js
+
+On the backend, I structure the Node.js API around three clear layers:
+
+| Layer | Responsibility |
+|-------|---------------|
+| **Routes** | HTTP contract — validates inputs, returns responses |
+| **Services** | Business logic — pure functions, easily testable |
+| **Repositories** | Data access — database queries, no business logic |
+
+```javascript
+// services/userService.js
+export async function createUser({ email, name }) {
+  if (!email || !name) throw new Error('email and name are required')
+  
+  const existing = await userRepo.findByEmail(email)
+  if (existing) throw new ConflictError('Email already in use')
+  
+  return userRepo.create({ email, name, createdAt: new Date() })
+}
+```
+
+## Performance Wins
+
+A few techniques that consistently move the needle:
+
+- **Code splitting** — `React.lazy()` + `Suspense` for route-level splits
+- **Memo wisely** — `useMemo` and `useCallback` only where profiling shows benefit
+- **Virtualise lists** — `TanStack Virtual` for lists exceeding ~100 items
+- **Image optimisation** — Serve WebP, use `loading="lazy"`, set explicit dimensions
+
+## Conclusion
+
+Scalability is earned incrementally. Start simple, measure where things hurt, then solve specifically those problems. The patterns above give you a starting point — but always adapt to your context.
+
+---
+
+*Want to go deeper on any of these patterns? Let me know via email.*

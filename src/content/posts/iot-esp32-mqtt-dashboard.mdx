@@ -1,0 +1,184 @@
+---
+title: "IoT Integration: Connecting ESP32 to a Real-Time Web Dashboard"
+date: "2026-01-15"
+excerpt: "A deep dive into MQTT protocols, ESP32 firmware, and crafting real-time dashboards that turn sensor data into actionable insights."
+tags: ["IoT", "MQTT", "Tutorial", "Backend"]
+readTime: "10 min read"
+---
+
+## Overview
+
+IoT projects are deceptively tricky. The hardware side is fun, but the full picture — firmware, message brokering, back-end persistence, and a live dashboard — involves a surprising number of moving parts. This guide walks through the complete stack.
+
+## The Architecture
+
+```
+ESP32 Sensor Node
+      │
+      │  MQTT over WiFi
+      ▼
+MQTT Broker (Mosquitto)
+      │
+      │  Subscribe
+      ▼
+Node.js Backend ──── PostgreSQL
+      │
+      │  WebSocket (Socket.io)
+      ▼
+React Dashboard
+```
+
+## ESP32 Firmware
+
+We'll use the Arduino framework with the `PubSubClient` library for MQTT.
+
+<Callout type="info">
+  Make sure you have the ESP32 board package installed in Arduino IDE. Go to Preferences and add the Espressif boards URL.
+</Callout>
+
+```cpp
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <DHT.h>
+
+const char* SSID     = "YOUR_WIFI";
+const char* PASSWORD = "YOUR_PASSWORD";
+const char* BROKER   = "192.168.1.100";
+const char* TOPIC    = "sensors/room1/temperature";
+
+#define DHT_PIN  4
+#define DHT_TYPE DHT22
+
+DHT dht(DHT_PIN, DHT_TYPE);
+WiFiClient wifi;
+PubSubClient client(wifi);
+
+void connectMQTT() {
+  while (!client.connected()) {
+    Serial.println("Connecting to MQTT...");
+    if (client.connect("ESP32Client")) {
+      Serial.println("Connected");
+    } else {
+      delay(2000);
+    }
+  }
+}
+
+void loop() {
+  if (!client.connected()) connectMQTT();
+  client.loop();
+
+  float temp = dht.readTemperature();
+  float hum  = dht.readHumidity();
+
+  if (!isnan(temp) && !isnan(hum)) {
+    String payload = "{\"temp\":" + String(temp, 1)
+                   + ",\"hum\":" + String(hum, 1)
+                   + ",\"ts\":" + String(millis()) + "}";
+    client.publish(TOPIC, payload.c_str());
+  }
+
+  delay(5000); // publish every 5 seconds
+}
+```
+
+## Setting Up Mosquitto
+
+On your server (Ubuntu):
+
+```bash
+sudo apt install mosquitto mosquitto-clients
+sudo systemctl enable mosquitto
+sudo systemctl start mosquitto
+```
+
+Test it from your terminal:
+
+```bash
+# Terminal 1 — subscribe
+mosquitto_sub -h localhost -t "sensors/#"
+
+# Terminal 2 — publish a test message
+mosquitto_pub -h localhost -t "sensors/room1/temperature" -m '{"temp":24.5,"hum":60}'
+```
+
+## Node.js Backend Subscriber
+
+```javascript
+import mqtt from 'mqtt'
+import { db } from './db.js'
+
+const broker = mqtt.connect('mqtt://localhost')
+
+broker.on('connect', () => {
+  console.log('Connected to MQTT broker')
+  broker.subscribe('sensors/#')
+})
+
+broker.on('message', async (topic, message) => {
+  try {
+    const payload = JSON.parse(message.toString())
+    const [, , sensorId] = topic.split('/')
+
+    await db.readings.create({
+      data: {
+        sensorId,
+        temperature: payload.temp,
+        humidity: payload.hum,
+        recordedAt: new Date(),
+      },
+    })
+
+    // Emit to connected WebSocket clients
+    io.emit('reading', { sensorId, ...payload })
+  } catch (err) {
+    console.error('Failed to process message:', err)
+  }
+})
+```
+
+## React Dashboard with Live Updates
+
+```jsx
+import { useState, useEffect } from 'react'
+import { io } from 'socket.io-client'
+
+const socket = io('http://localhost:3001')
+
+export function SensorDashboard() {
+  const [readings, setReadings] = useState([])
+
+  useEffect(() => {
+    socket.on('reading', (data) => {
+      setReadings(prev => [data, ...prev].slice(0, 50))
+    })
+    return () => socket.off('reading')
+  }, [])
+
+  return (
+    <div className="grid gap-4">
+      {readings.map((r, i) => (
+        <div key={i} className="border p-4">
+          <span>{r.sensorId}</span>
+          <span>{r.temp}°C</span>
+          <span>{r.hum}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+## Common Pitfalls
+
+<Callout type="warning">
+  Don't publish sensor data faster than your broker and backend can consume it. With multiple nodes, 5–10 second intervals are usually fine. Rapid publishing causes message queue buildup.
+</Callout>
+
+- **QoS levels** — Use QoS 1 for important readings to guarantee at-least-once delivery
+- **Retained messages** — Set `retain: true` so new subscribers immediately get the last reading
+- **TLS in production** — Never run Mosquitto without TLS on a public network
+
+## Wrapping Up
+
+The stack above handles a surprising number of sensors reliably. For larger deployments, consider replacing Mosquitto with EMQX and adding a time-series database like TimescaleDB or InfluxDB for efficient historical queries.
